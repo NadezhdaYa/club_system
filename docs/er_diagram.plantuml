@@ -1,0 +1,57 @@
+@startuml
+entity "clients" {
+    *id : int <<PK>>
+    full_name : varchar
+    phone : varchar
+    email : varchar
+    birth_date : date
+    status : varchar
+    created_at : timestamp
+}
+
+entity "staff" {
+    *id : int <<PK>>
+    full_name : varchar
+    position : varchar
+    phone : varchar
+    email : varchar
+    is_active : boolean
+}
+
+entity "services" {
+    *id : int <<PK>>
+    name : varchar
+    price : numeric
+    duration_minutes : int
+    is_active : boolean
+}
+
+entity "schedule_slots" {
+    *id : int <<PK>>
+    staff_id : int <<FK>>
+    day_of_week : int
+    start_time : time
+    end_time : time
+    max_clients : int
+}
+
+entity "training_sessions" {
+    *id : int <<PK>>
+    external_id : varchar
+    service_id : int <<FK>>
+    staff_id : int <<FK>>
+    client_id : int <<FK>>
+    start_at : timestamp
+    end_at : timestamp
+    status : varchar
+    notes : text
+    data_from : timestamp
+    data_to : timestamp
+    is_actual : boolean
+}
+
+clients ||--o{ training_sessions : "участвует в"
+staff ||--o{ schedule_slots : "ведёт"
+staff ||--o{ training_sessions : "проводит"
+services ||--o{ training_sessions : "используется в"
+@enduml
