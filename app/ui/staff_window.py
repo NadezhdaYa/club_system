@@ -1,32 +1,31 @@
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTableWidget,
                               QTableWidgetItem, QPushButton, QDialog, QFormLayout,
-                              QLineEdit, QDateEdit, QMessageBox, QHeaderView)
-from PyQt6.QtCore import Qt, QDate
-from PyQt6.QtGui import QColor
-from app.repositories import ClientRepository
+                              QLineEdit, QCheckBox, QMessageBox, QHeaderView)
+from PyQt6.QtCore import Qt
+from app.repositories import StaffRepository
 
-class ClientsWindow(QWidget):
+
+class StaffWindow(QWidget):
     def __init__(self, session_factory):
         super().__init__()
         self.session_factory = session_factory
         layout = QVBoxLayout()
 
+        # Панель кнопок
         btn_layout = QHBoxLayout()
-        btn_add = QPushButton("Добавить клиента")
-        btn_add.clicked.connect(self.add_client)
-        btn_training = QPushButton("Добавить тренировку")
-        btn_training.clicked.connect(self.open_training_form)
+        btn_add = QPushButton("Добавить")
+        btn_add.clicked.connect(self.add_staff)
         btn_refresh = QPushButton("Обновить")
         btn_refresh.clicked.connect(self.load_data)
         btn_layout.addWidget(btn_add)
-        btn_layout.addWidget(btn_training)
         btn_layout.addWidget(btn_refresh)
         btn_layout.addStretch()
 
+        # Таблица
         self.table = QTableWidget()
         self.table.setColumnCount(6)
         self.table.setHorizontalHeaderLabels(
-            ["ID", "ФИО", "Телефон", "E-mail", "Статус", "Дата рождения"]
+            ["ID", "ФИО", "Телефон", "E-mail", "Должность", "Активен"]
         )
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.setAlternatingRowColors(True)
@@ -36,66 +35,51 @@ class ClientsWindow(QWidget):
         self.setLayout(layout)
         self.load_data()
 
-    def status_color(self, status):
-        mapping = {
-            "active": QColor(144, 238, 144),
-            "new": QColor(255, 255, 0),
-            "frozen": QColor(173, 216, 230),
-            "closed": QColor(255, 182, 193),
-        }
-        return mapping.get(status, QColor(255, 255, 255))
-
     def load_data(self):
         session = self.session_factory()
         try:
-            clients = ClientRepository.get_all(session)
+            staff = StaffRepository.get_all(session)
             self.table.setRowCount(0)
-            for c in clients:
+            for s in staff:
                 row = self.table.rowCount()
                 self.table.insertRow(row)
-                self.table.setItem(row, 0, QTableWidgetItem(str(c.id)))
-                self.table.setItem(row, 1, QTableWidgetItem(c.full_name))
-                self.table.setItem(row, 2, QTableWidgetItem(c.phone or ""))
-                self.table.setItem(row, 3, QTableWidgetItem(c.email or ""))
-
-                status_item = QTableWidgetItem(c.status)
-                status_item.setBackground(self.status_color(c.status))
-                self.table.setItem(row, 4, status_item)
-
-                bd_str = c.birth_date.isoformat() if c.birth_date else ""
-                self.table.setItem(row, 5, QTableWidgetItem(bd_str))
+                self.table.setItem(row, 0, QTableWidgetItem(str(s.id)))
+                self.table.setItem(row, 1, QTableWidgetItem(s.full_name))
+                self.table.setItem(row, 2, QTableWidgetItem(s.phone or ""))
+                self.table.setItem(row, 3, QTableWidgetItem(s.email or ""))
+                self.table.setItem(row, 4, QTableWidgetItem(s.position or ""))
+                active_item = QTableWidgetItem("Да" if s.is_active else "Нет")
+                active_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.table.setItem(row, 5, active_item)
         finally:
             session.close()
 
-    def add_client(self):
-        dialog = ClientDialog(self.session_factory, self)
+    def add_staff(self):
+        dialog = StaffDialog(self.session_factory, self)
         dialog.exec()
         self.load_data()
 
-    def open_training_form(self):
-        from app.ui.training_form import TrainingForm
-        form = TrainingForm(self.session_factory)
-        form.exec()
 
-class ClientDialog(QDialog):
+class StaffDialog(QDialog):
     def __init__(self, session_factory, parent=None):
         super().__init__(parent)
         self.session_factory = session_factory
-        self.setWindowTitle("Добавить клиента")
+        self.setWindowTitle("Добавить сотрудника")
         self.resize(350, 300)
 
         layout = QFormLayout()
         self.name_edit = QLineEdit()
         self.phone_edit = QLineEdit()
         self.email_edit = QLineEdit()
-        self.birth_edit = QDateEdit()
-        self.birth_edit.setDisplayFormat("yyyy-MM-dd")
-        self.birth_edit.setDate(QDate(2000, 1, 1))
+        self.position_edit = QLineEdit()
+        self.active_check = QCheckBox()
+        self.active_check.setChecked(True)
 
         layout.addRow("ФИО *:", self.name_edit)
         layout.addRow("Телефон:", self.phone_edit)
         layout.addRow("E-mail:", self.email_edit)
-        layout.addRow("Дата рождения:", self.birth_edit)
+        layout.addRow("Должность:", self.position_edit)
+        layout.addRow("Активен:", self.active_check)
 
         btn_save = QPushButton("Сохранить")
         btn_save.clicked.connect(self.save)
@@ -109,13 +93,14 @@ class ClientDialog(QDialog):
             return
         session = self.session_factory()
         try:
-            ClientRepository.create(
+            StaffRepository.create(
                 session, full_name=name,
                 phone=self.phone_edit.text().strip() or None,
                 email=self.email_edit.text().strip() or None,
-                birth_date=self.birth_edit.date().toPyDate()
+                position=self.position_edit.text().strip() or None,
+                is_active=self.active_check.isChecked()
             )
-            QMessageBox.information(self, "Готово", "Клиент добавлен.")
+            QMessageBox.information(self, "Готово", "Сотрудник добавлен.")
             self.accept()
         except Exception as e:
             session.rollback()

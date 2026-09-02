@@ -1,22 +1,21 @@
-from sqlalchemy import func, select
 from datetime import timedelta
-from app.models import TrainingSession
+from repositories import TrainingSessionRepository
 
-class TrainingService:
+class SchedulingService:
     @staticmethod
-    def check_capacity(session, staff_id, start_at, end_at):
-        # считаем активные (is_actual) и не отменённые сессии в интервале
-        q = (
-            select(func.count(TrainingSession.id))
-            .where(
-                TrainingSession.staff_id == staff_id,
-                TrainingSession.is_actual == True,
-                TrainingSession.status != "cancelled",
-                TrainingSession.start_at < end_at,
-                TrainingSession.end_at > start_at
-            )
-        )
-        count = session.scalar(q) or 0
-        # лимит можно брать из schedule_slots или хардкодить для прототипа
-        max_clients = 4  # например
-        return count < max_clients
+    def check_staff_conflict(session, staff_id, start_at, end_at) -> bool:
+        conflicts = TrainingSessionRepository.get_planned_for_staff(session, staff_id, start_at, end_at)
+        return len(conflicts) == 0
+
+    @staticmethod
+    def check_group_limit(session, service_id, start_at, end_at, limit: int) -> bool:
+        # упрощённо: считаем все актуальные "planned" сессии в этом интервале
+        from models import TrainingSession as TS
+        count = session.query(TS).filter(
+            TS.service_id == service_id,
+            TS.is_actual == True,
+            TS.status == "planned",
+            TS.start_at < end_at,
+            TS.end_at > start_at
+        ).count()
+        return count < limit
