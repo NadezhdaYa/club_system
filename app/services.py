@@ -1,5 +1,5 @@
 from datetime import timedelta
-from repositories import TrainingSessionRepository
+from app.repositories import TrainingSessionRepository
 
 class SchedulingService:
     @staticmethod
