@@ -24,9 +24,9 @@ class ClientsWindow(QWidget):
         btn_layout.addStretch()
 
         self.table = QTableWidget()
-        self.table.setColumnCount(6)
+        self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels(
-            ["ID", "ФИО", "Телефон", "E-mail", "Статус", "Дата рождения"]
+            ["ID", "ФИО", "Телефон", "E-mail", "Статус", "Дата рождения", "Действия"]
         )
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.setAlternatingRowColors(True)
@@ -64,6 +64,11 @@ class ClientsWindow(QWidget):
 
                 bd_str = c.birth_date.isoformat() if c.birth_date else ""
                 self.table.setItem(row, 5, QTableWidgetItem(bd_str))
+
+                edit_btn = QPushButton("Изменить")
+                edit_btn.setFixedWidth(80)
+                edit_btn.clicked.connect(lambda checked, cid=c.id: self.edit_client(cid))
+                self.table.setCellWidget(row, 6, edit_btn)
         finally:
             session.close()
 
@@ -72,16 +77,24 @@ class ClientsWindow(QWidget):
         dialog.exec()
         self.load_data()
 
+    def edit_client(self, client_id):
+        dialog = ClientDialog(self.session_factory, self, client_id=client_id)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.load_data()
+
     def open_training_form(self):
         from app.ui.training_form import TrainingForm
         form = TrainingForm(self.session_factory)
         form.exec()
 
 class ClientDialog(QDialog):
-    def __init__(self, session_factory, parent=None):
+    def __init__(self, session_factory, parent=None, client_id=None):
         super().__init__(parent)
         self.session_factory = session_factory
-        self.setWindowTitle("Добавить клиента")
+        self.client_id = client_id
+        self.is_edit = client_id is not None
+        title = "Редактировать клиента" if self.is_edit else "Добавить клиента"
+        self.setWindowTitle(title)
         self.resize(350, 300)
 
         layout = QFormLayout()
@@ -90,7 +103,7 @@ class ClientDialog(QDialog):
         self.email_edit = QLineEdit()
         self.birth_edit = QDateEdit()
         self.birth_edit.setDisplayFormat("yyyy-MM-dd")
-        self.birth_edit.setDate(QDate(2000, 1, 1))
+        #self.birth_edit.setDate(QDate(2000, 1, 1))
 
         layout.addRow("ФИО *:", self.name_edit)
         layout.addRow("Телефон:", self.phone_edit)
@@ -102,6 +115,23 @@ class ClientDialog(QDialog):
         layout.addRow(btn_save)
         self.setLayout(layout)
 
+        if self.is_edit:
+            # Загружаем данные
+            session = self.session_factory()
+            try:
+                client = ClientRepository.get_by_id(session, client_id)
+                if not client:
+                    QMessageBox.critical(self, "Ошибка", "Клиент не найден")
+                    self.reject()
+                    return
+                self.name_edit.setText(client.full_name)
+                self.phone_edit.setText(client.phone or "")
+                self.email_edit.setText(client.email or "")
+                if client.birth_date:
+                    self.birth_edit.setDate(QDate.fromString(client.birth_date.isoformat(), "yyyy-MM-dd"))
+            finally:
+                session.close()
+
     def save(self):
         name = self.name_edit.text().strip()
         if not name:
@@ -109,13 +139,21 @@ class ClientDialog(QDialog):
             return
         session = self.session_factory()
         try:
-            ClientRepository.create(
-                session, full_name=name,
-                phone=self.phone_edit.text().strip() or None,
-                email=self.email_edit.text().strip() or None,
-                birth_date=self.birth_edit.date().toPyDate()
-            )
-            QMessageBox.information(self, "Готово", "Клиент добавлен.")
+            if self.is_edit:
+                ClientRepository.update(session, self.client_id,
+                                        full_name=name,
+                                        phone=self.phone_edit.text().strip() or None,
+                                        email=self.email_edit.text().strip() or None,
+                                        birth_date=self.birth_edit.date().toPyDate())
+                QMessageBox.information(self, "Готово", "Клиент обновлён.")
+            else:
+                ClientRepository.create(
+                    session, full_name=name,
+                    phone=self.phone_edit.text().strip() or None,
+                    email=self.email_edit.text().strip() or None,
+                    birth_date=self.birth_edit.date().toPyDate()
+                )
+                QMessageBox.information(self, "Готово", "Клиент добавлен.")
             self.accept()
         except Exception as e:
             session.rollback()

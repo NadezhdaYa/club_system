@@ -1,14 +1,13 @@
-from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QFormLayout, QLineEdit,
+from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QFormLayout, QLineEdit,
                              QComboBox, QDateTimeEdit, QTextEdit, QPushButton,
                              QMessageBox)
-from PyQt6.QtCore import Qt, QDateTime
-from sqlalchemy.orm import Session
-from models import TrainingSession
-from services import SchedulingService
-from repositories import StaffRepository, ServiceRepository, ClientRepository
+from PyQt6.QtCore import QDateTime
+from app.models import TrainingSession
+from app.services import SchedulingService
+from app.repositories import StaffRepository, ServiceRepository, ClientRepository
 
 
-class TrainingForm(QWidget):
+class TrainingForm(QDialog):
     def __init__(self, session_factory):
         super().__init__()
         self.session_factory = session_factory
@@ -45,7 +44,6 @@ class TrainingForm(QWidget):
         layout.addLayout(form)
         layout.addWidget(btn_save)
         self.setLayout(layout)
-
         self.load_combos()
 
     def load_combos(self):

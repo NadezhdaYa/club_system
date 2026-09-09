@@ -10,7 +10,7 @@ class SchedulingService:
     @staticmethod
     def check_group_limit(session, service_id, start_at, end_at, limit: int) -> bool:
         # упрощённо: считаем все актуальные "planned" сессии в этом интервале
-        from models import TrainingSession as TS
+        from app.models import TrainingSession as TS
         count = session.query(TS).filter(
             TS.service_id == service_id,
             TS.is_actual == True,

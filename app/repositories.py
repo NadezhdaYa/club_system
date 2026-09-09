@@ -18,22 +18,22 @@ class ClientRepository:
         return session.query(Client).filter(Client.status == status).all()
 
     @staticmethod
-    def create(session: Session, full_name, phone=None, email=None,
-               birth_date=None, status="new"):
-        c = Client(full_name=full_name, phone=phone, email=email,
-                   birth_date=birth_date, status=status)
-        session.add(c)
+    def create(session: Session, **kwargs):
+        client = Client(**kwargs)
+        session.add(client)
         session.commit()
-        return c
+        session.refresh(client)
+        return client
 
     @staticmethod
-    def update(session: Session, client_id, **kwargs):
-        c = session.query(Client).filter(Client.id == client_id).one_or_none()
-        if c:
-            for k, v in kwargs.items():
-                setattr(c, k, v)
-            session.commit()
-        return c
+    def update(session: Session, client_id: int, **kwargs):
+        client = session.query(Client).filter(Client.id == client_id).one_or_none()
+        if not client:
+            return None
+        for k, v in kwargs.items():
+            setattr(client, k, v)
+        session.commit()
+        return client
 
 
 class StaffRepository:
@@ -46,13 +46,26 @@ class StaffRepository:
         return session.query(Staff).filter(Staff.is_active == True).all()
 
     @staticmethod
-    def create(session: Session, full_name, phone=None, email=None,
-               position=None, is_active=True):
-        s = Staff(full_name=full_name, phone=phone, email=email,
-                  position=position, is_active=is_active)
-        session.add(s)
+    def get_by_id(session: Session, staff_id: int):
+        return session.query(Staff).filter(Staff.id == staff_id).one_or_none()
+
+    @staticmethod
+    def create(session: Session, **kwargs):
+        staff = Staff(**kwargs)
+        session.add(staff)
         session.commit()
-        return s
+        session.refresh(staff)
+        return staff
+
+    @staticmethod
+    def update(session: Session, staff_id: int, **kwargs):
+        staff = session.query(Staff).filter(Staff.id == staff_id).one_or_none()
+        if not staff:
+            return None
+        for k, v in kwargs.items():
+            setattr(staff, k, v)
+        session.commit()
+        return staff
 
 
 class ServiceRepository:
@@ -65,12 +78,26 @@ class ServiceRepository:
         return session.query(Service).filter(Service.is_active == True).all()
 
     @staticmethod
-    def create(session: Session, name, price, duration_minutes, is_active=True):
-        s = Service(name=name, price=price,
-                    duration_minutes=duration_minutes, is_active=is_active)
-        session.add(s)
+    def create(session: Session, **kwargs):
+        service = Service(**kwargs)
+        session.add(service)
         session.commit()
-        return s
+        session.refresh(service)
+        return service
+
+    @staticmethod
+    def get_by_id(session: Session, service_id: int):
+        return session.query(Service).filter(Service.id == service_id).one_or_none()
+
+    @staticmethod
+    def update(session: Session, service_id: int, **kwargs):
+        service = session.query(Service).filter(Service.id == service_id).one_or_none()
+        if not service:
+            return None
+        for k, v in kwargs.items():
+            setattr(service, k, v)
+        session.commit()
+        return service
 
 
 class ScheduleSlotRepository:
@@ -85,13 +112,24 @@ class ScheduleSlotRepository:
         ).order_by(ScheduleSlot.day_of_week, ScheduleSlot.start_time).all()
 
     @staticmethod
-    def create(session: Session, staff_id, day_of_week, start_time,
-               end_time, max_clients):
-        slot = ScheduleSlot(staff_id=staff_id, day_of_week=day_of_week,
-                            start_time=start_time, end_time=end_time,
-                            max_clients=max_clients)
+    def create(session: Session, **kwargs):
+        slot = ScheduleSlot(**kwargs)
         session.add(slot)
         session.commit()
+        session.refresh(slot)
+        return slot
+
+    @staticmethod
+    def get_by_id(session: Session, slot_id: int):
+        return session.query(ScheduleSlot).filter(ScheduleSlot.id == slot_id).one_or_none()
+
+    @staticmethod
+    def update(session: Session, slot_id, **kwargs):
+        slot = session.query(ScheduleSlot).filter(ScheduleSlot.id == slot_id).one_or_none()
+        if slot:
+            for k, v in kwargs.items():
+                setattr(slot, k, v)
+            session.commit()
         return slot
 
 

@@ -23,9 +23,9 @@ class StaffWindow(QWidget):
 
         # Таблица
         self.table = QTableWidget()
-        self.table.setColumnCount(6)
+        self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels(
-            ["ID", "ФИО", "Телефон", "E-mail", "Должность", "Активен"]
+            ["ID", "ФИО", "Телефон", "E-mail", "Должность", "Активен", "Действия"]
         )
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.setAlternatingRowColors(True)
@@ -51,20 +51,32 @@ class StaffWindow(QWidget):
                 active_item = QTableWidgetItem("Да" if s.is_active else "Нет")
                 active_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.table.setItem(row, 5, active_item)
+
+                edit_btn = QPushButton("Изменить")
+                edit_btn.setFixedWidth(80)
+                edit_btn.clicked.connect(lambda checked, sid=s.id: self.edit_staff(sid))
+                self.table.setCellWidget(row, 6, edit_btn)
         finally:
             session.close()
 
     def add_staff(self):
         dialog = StaffDialog(self.session_factory, self)
-        dialog.exec()
-        self.load_data()
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.load_data()
 
+    def edit_staff(self, staff_id):
+        dialog = StaffDialog(self.session_factory, self, staff_id=staff_id)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.load_data()
 
 class StaffDialog(QDialog):
-    def __init__(self, session_factory, parent=None):
+    def __init__(self, session_factory, parent=None, staff_id=None):
         super().__init__(parent)
         self.session_factory = session_factory
-        self.setWindowTitle("Добавить сотрудника")
+        self.staff_id = staff_id
+        self.is_edit = staff_id is not None
+        title = "Редактировать сотрудника" if self.is_edit else "Добавить сотрудника"
+        self.setWindowTitle(title)
         self.resize(350, 300)
 
         layout = QFormLayout()
@@ -86,6 +98,22 @@ class StaffDialog(QDialog):
         layout.addRow(btn_save)
         self.setLayout(layout)
 
+        if self.is_edit:
+            session = self.session_factory()
+            try:
+                s = StaffRepository.get_by_id(session, staff_id)
+                if not s:
+                    QMessageBox.critical(self, "Ошибка", "Сотрудник не найден")
+                    self.reject()
+                    return
+                self.name_edit.setText(s.full_name)
+                self.phone_edit.setText(s.phone or "")
+                self.email_edit.setText(s.email or "")
+                self.position_edit.setText(s.position or "")
+                self.active_check.setChecked(s.is_active)
+            finally:
+                session.close()
+
     def save(self):
         name = self.name_edit.text().strip()
         if not name:
@@ -93,14 +121,23 @@ class StaffDialog(QDialog):
             return
         session = self.session_factory()
         try:
-            StaffRepository.create(
-                session, full_name=name,
-                phone=self.phone_edit.text().strip() or None,
-                email=self.email_edit.text().strip() or None,
-                position=self.position_edit.text().strip() or None,
-                is_active=self.active_check.isChecked()
-            )
-            QMessageBox.information(self, "Готово", "Сотрудник добавлен.")
+            if self.is_edit:
+                StaffRepository.update(session, self.staff_id,
+                                       full_name=name,
+                                       phone=self.phone_edit.text().strip() or None,
+                                       email=self.email_edit.text().strip() or None,
+                                       position=self.position_edit.text().strip() or None,
+                                       is_active=self.active_check.isChecked())
+                QMessageBox.information(self, "Готово", "Сотрудник обновлён.")
+            else:
+                StaffRepository.create(
+                    session, full_name=name,
+                    phone=self.phone_edit.text().strip() or None,
+                    email=self.email_edit.text().strip() or None,
+                    position=self.position_edit.text().strip() or None,
+                    is_active=self.active_check.isChecked()
+                )
+                QMessageBox.information(self, "Готово", "Сотрудник добавлен.")
             self.accept()
         except Exception as e:
             session.rollback()

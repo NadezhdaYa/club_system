@@ -145,8 +145,8 @@ class ReportsWindow(QWidget):
         if not staff_id:
             QMessageBox.warning(self, "Ошибка", "Выберите тренера.")
             return
-        date_from = self.date_from_staff.date().toPyDateTime()
-        date_to = self.date_to_staff.date().toPyDateTime()
+        date_from = self.date_from_staff.date().toPyDate()
+        date_to = self.date_to_staff.date().toPyDate()
         session = self.session_factory()
         try:
             rows = ReportRepository.staff_schedule(session, staff_id, date_from, date_to)

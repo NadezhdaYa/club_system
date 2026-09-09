@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTableWidget,
-                              QTableWidgetItem, QPushButton, QDialog, QFormLayout,
-                              QComboBox, QSpinBox, QMessageBox, QHeaderView)
+                             QTableWidgetItem, QPushButton, QDialog, QFormLayout,
+                             QComboBox, QSpinBox, QMessageBox, QHeaderView, QLineEdit)
 from PyQt6.QtCore import Qt
 from app.repositories import ScheduleSlotRepository, StaffRepository
 from app.services import SchedulingService
@@ -32,9 +32,9 @@ class ScheduleWindow(QWidget):
         btn_layout.addStretch()
 
         self.table = QTableWidget()
-        self.table.setColumnCount(5)
+        self.table.setColumnCount(6)
         self.table.setHorizontalHeaderLabels(
-            ["ID", "Тренер", "День недели", "Время", "Макс. клиентов"]
+            ["ID", "Тренер", "День недели", "Время", "Макс. клиентов", "Действия"]
         )
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.setAlternatingRowColors(True)
@@ -57,6 +57,11 @@ class ScheduleWindow(QWidget):
                 self.table.setItem(row, 2, QTableWidgetItem(DAYS.get(slot.day_of_week, str(slot.day_of_week))))
                 self.table.setItem(row, 3, QTableWidgetItem(f"{slot.start_time} – {slot.end_time}"))
                 self.table.setItem(row, 4, QTableWidgetItem(str(slot.max_clients)))
+
+                edit_btn = QPushButton("Изменить")
+                edit_btn.setFixedWidth(80)
+                edit_btn.clicked.connect(lambda checked, sid=slot.id: self.edit_slot(sid))
+                self.table.setCellWidget(row, 5, edit_btn)
         finally:
             session.close()
 
@@ -65,12 +70,20 @@ class ScheduleWindow(QWidget):
         dialog.exec()
         self.load_data()
 
+    def edit_slot(self, slot_id):
+        dialog = SlotDialog(self.session_factory, self, slot_id=slot_id)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.load_data()
+
 
 class SlotDialog(QDialog):
-    def __init__(self, session_factory, parent=None):
+    def __init__(self, session_factory, parent=None, slot_id=None):
         super().__init__(parent)
         self.session_factory = session_factory
-        self.setWindowTitle("Добавить слот расписания")
+        self.slot_id = slot_id
+        self.is_edit = slot_id is not None
+        title = "Редактировать слот" if self.is_edit else "Добавить слот"
+        self.setWindowTitle(title)
         self.resize(350, 300)
 
         layout = QFormLayout()
@@ -108,28 +121,62 @@ class SlotDialog(QDialog):
         layout.addRow(btn_save)
         self.setLayout(layout)
 
+        if self.is_edit:
+            session = self.session_factory()
+            try:
+                slot = ScheduleSlotRepository.get_by_id(session, slot_id)
+                if not slot:
+                    QMessageBox.critical(self, "Ошибка", "Слот не найден")
+                    self.reject()
+                    return
+
+                # Устанавливаем значения
+                self.staff_combo.setCurrentIndex(
+                    self.staff_combo.findData(slot.staff_id)
+                )
+                self.day_combo.setCurrentIndex(
+                    self.day_combo.findData(slot.day_of_week)
+                )
+                self.start_edit.setText(slot.start_time.strftime("%H:%M") if slot.start_time else "")
+                self.end_edit.setText(slot.end_time.strftime("%H:%M") if slot.end_time else "")
+                self.max_spin.setValue(slot.max_clients)
+            finally:
+                session.close()
+
     def save(self):
         staff_id = self.staff_combo.currentData()
-        if not staff_id:
-            QMessageBox.warning(self, "Ошибка", "Выберите тренера.")
-            return
+        day_id = self.day_combo.currentData()
         start = self.start_edit.text().strip()
         end = self.end_edit.text().strip()
+        max_clients = self.max_spin.value()
+
+        if not staff_id or not day_id:
+            QMessageBox.warning(self, "Ошибка", "Выберите тренера и день недели.")
+            return
         if not start or not end:
             QMessageBox.warning(self, "Ошибка", "Укажите время начала и окончания.")
             return
 
         session = self.session_factory()
         try:
-            ScheduleSlotRepository.create(
-                session,
-                staff_id=staff_id,
-                day_of_week=self.day_combo.currentData(),
-                start_time=start,
-                end_time=end,
-                max_clients=self.max_spin.value()
-            )
-            QMessageBox.information(self, "Готово", "Слот добавлен.")
+            if self.is_edit:
+                ScheduleSlotRepository.update(session, self.slot_id,
+                                              staff_id=staff_id,
+                                              day_of_week=day_id,
+                                              start_time=start,
+                                              end_time=end,
+                                              max_clients=max_clients)
+                QMessageBox.information(self, "Готово", "Слот обновлён.")
+            else:
+                ScheduleSlotRepository.create(
+                    session,
+                    staff_id=staff_id,
+                    day_of_week=self.day_combo.currentData(),
+                    start_time=start,
+                    end_time=end,
+                    max_clients=self.max_spin.value()
+                )
+                QMessageBox.information(self, "Готово", "Слот добавлен.")
             self.accept()
         except Exception as e:
             session.rollback()
