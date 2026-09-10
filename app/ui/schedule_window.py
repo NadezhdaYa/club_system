@@ -61,7 +61,20 @@ class ScheduleWindow(QWidget):
                 edit_btn = QPushButton("Изменить")
                 edit_btn.setFixedWidth(80)
                 edit_btn.clicked.connect(lambda checked, sid=slot.id: self.edit_slot(sid))
-                self.table.setCellWidget(row, 5, edit_btn)
+
+                del_btn = QPushButton("Удалить")
+                del_btn.setFixedWidth(80)
+                del_btn.setStyleSheet("color: red; font-weight: bold;")
+                del_btn.clicked.connect(lambda checked, sid=slot.id: self.delete_slot(sid))
+
+                action_layout = QHBoxLayout()
+                action_layout.setContentsMargins(0, 0, 0, 0)
+                action_layout.addWidget(edit_btn)
+                action_layout.addWidget(del_btn)
+
+                cell_widget = QWidget()
+                cell_widget.setLayout(action_layout)
+                self.table.setCellWidget(row, 5, cell_widget)
         finally:
             session.close()
 
@@ -74,6 +87,31 @@ class ScheduleWindow(QWidget):
         dialog = SlotDialog(self.session_factory, self, slot_id=slot_id)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.load_data()
+
+    def delete_slot(self, slot_id: int):
+        reply = QMessageBox.question(
+            self,
+            "Подтверждение",
+            f"Удалить слот расписания с ID {slot_id}?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        session = self.session_factory()
+        try:
+            ok = ScheduleSlotRepository.delete(session, slot_id)
+            if ok:
+                QMessageBox.information(self, "Готово", "Слот удалён.")
+                self.load_data()
+            else:
+                QMessageBox.warning(self, "Ошибка", "Слот не найден.")
+        except Exception as e:
+            session.rollback()
+            QMessageBox.critical(self, "Ошибка БД", str(e))
+        finally:
+            session.close()
 
 
 class SlotDialog(QDialog):

@@ -53,7 +53,20 @@ class ServicesWindow(QWidget):
                 edit_btn = QPushButton("Изменить")
                 edit_btn.setFixedWidth(80)
                 edit_btn.clicked.connect(lambda checked, sid=s.id: self.edit_service(sid))
-                self.table.setCellWidget(row, 5, edit_btn)
+
+                del_btn = QPushButton("Удалить")
+                del_btn.setFixedWidth(80)
+                del_btn.setStyleSheet("color: red; font-weight: bold;")
+                del_btn.clicked.connect(lambda checked, sid=s.id: self.delete_service(sid))
+
+                action_layout = QHBoxLayout()
+                action_layout.setContentsMargins(0, 0, 0, 0)
+                action_layout.addWidget(edit_btn)
+                action_layout.addWidget(del_btn)
+
+                cell_widget = QWidget()
+                cell_widget.setLayout(action_layout)
+                self.table.setCellWidget(row, 5, cell_widget)
         finally:
             session.close()
 
@@ -66,6 +79,32 @@ class ServicesWindow(QWidget):
         dialog = ServiceDialog(self.session_factory, self, service_id=service_id)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.load_data()
+
+    def delete_service(self, service_id: int):
+        reply = QMessageBox.question(
+            self,
+            "Подтверждение",
+            f"Удалить услугу с ID {service_id}?\n"
+            "Связанные тренировки останутся в базе (ON DELETE RESTRICT).",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        session = self.session_factory()
+        try:
+            ok = ServiceRepository.delete(session, service_id)
+            if ok:
+                QMessageBox.information(self, "Готово", "Услуга удалена.")
+                self.load_data()
+            else:
+                QMessageBox.warning(self, "Ошибка", "Услуга не найдена.")
+        except Exception as e:
+            session.rollback()
+            QMessageBox.critical(self, "Ошибка БД", str(e))
+        finally:
+            session.close()
 
 
 class ServiceDialog(QDialog):

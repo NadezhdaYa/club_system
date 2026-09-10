@@ -8,6 +8,7 @@ from app.ui.staff_window import StaffWindow
 from app.ui.services_window import ServicesWindow
 from app.ui.schedule_window import ScheduleWindow
 from app.ui.reports_window import ReportsWindow
+from app.ui.training_sessions_window import TrainingSessionsWindow
 
 
 class MainWindow(QMainWindow):
@@ -24,6 +25,7 @@ class MainWindow(QMainWindow):
         tabs.addTab(StaffWindow(self.session_factory), "Персонал")
         tabs.addTab(ServicesWindow(self.session_factory), "Услуги")
         tabs.addTab(ScheduleWindow(self.session_factory), "Расписание")
+        tabs.addTab(TrainingSessionsWindow(self.session_factory), "Тренировки")
         tabs.addTab(ReportsWindow(self.session_factory), "Отчёты")
 
         self.setCentralWidget(tabs)

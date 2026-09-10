@@ -52,10 +52,24 @@ class StaffWindow(QWidget):
                 active_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.table.setItem(row, 5, active_item)
 
+                # Кнопки в колонке «Действия»
                 edit_btn = QPushButton("Изменить")
                 edit_btn.setFixedWidth(80)
                 edit_btn.clicked.connect(lambda checked, sid=s.id: self.edit_staff(sid))
-                self.table.setCellWidget(row, 6, edit_btn)
+
+                del_btn = QPushButton("Удалить")
+                del_btn.setFixedWidth(80)
+                del_btn.setStyleSheet("color: red; font-weight: bold;")
+                del_btn.clicked.connect(lambda checked, sid=s.id: self.delete_staff(sid))
+
+                action_layout = QHBoxLayout()
+                action_layout.setContentsMargins(0, 0, 0, 0)
+                action_layout.addWidget(edit_btn)
+                action_layout.addWidget(del_btn)
+
+                cell_widget = QWidget()
+                cell_widget.setLayout(action_layout)
+                self.table.setCellWidget(row, 6, cell_widget)
         finally:
             session.close()
 
@@ -68,6 +82,34 @@ class StaffWindow(QWidget):
         dialog = StaffDialog(self.session_factory, self, staff_id=staff_id)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.load_data()
+
+    def delete_staff(self, staff_id: int):
+        reply = QMessageBox.question(
+            self,
+            "Подтверждение",
+            f"Удалить сотрудника с ID {staff_id}?\n"
+            "Это также удалит все его слоты расписания.\n"
+            "Если есть связанные тренировки — удаление будет заблокировано БД.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        session = self.session_factory()
+        try:
+            ok = StaffRepository.delete(session, staff_id)
+            if ok:
+                QMessageBox.information(self, "Готово", "Сотрудник и его слоты удалены.")
+                self.load_data()
+            else:
+                QMessageBox.warning(self, "Ошибка", "Сотрудник не найден.")
+        except Exception as e:
+            session.rollback()
+            QMessageBox.critical(self, "Ошибка БД", str(e))
+        finally:
+            session.close()
+
 
 class StaffDialog(QDialog):
     def __init__(self, session_factory, parent=None, staff_id=None):

@@ -18,22 +18,80 @@ class ClientRepository:
         return session.query(Client).filter(Client.status == status).all()
 
     @staticmethod
-    def create(session: Session, **kwargs):
-        client = Client(**kwargs)
-        session.add(client)
+    def create(session: Session, full_name, phone=None, email=None, birth_date=None):
+        c = Client(full_name=full_name, phone=phone, email=email, birth_date=birth_date, status="new")
+        session.add(c)
         session.commit()
-        session.refresh(client)
-        return client
+        return c
 
     @staticmethod
     def update(session: Session, client_id: int, **kwargs):
         client = session.query(Client).filter(Client.id == client_id).one_or_none()
         if not client:
-            return None
+            raise ValueError("Client not found")
         for k, v in kwargs.items():
             setattr(client, k, v)
         session.commit()
         return client
+
+    @staticmethod
+    def update_status(session: Session, client_id: int, new_status: str) -> tuple[bool, str]:
+        """
+        Возвращает (True, "") при успехе,
+        (False, "причина") при отказе.
+        """
+        client = session.query(Client).filter(Client.id == client_id).one_or_none()
+        if not client:
+            return False, "Клиент не найден."
+
+        from app.models import TrainingSession
+
+        # Нельзя закрыть клиента с активными тренировками
+        if new_status == "closed":
+            active_count = (
+                session.query(TrainingSession)
+                .filter(
+                    TrainingSession.client_id == client_id,
+                    TrainingSession.is_actual == True,
+                    TrainingSession.status.in_(["planned", "completed"]),
+                )
+                .count()
+            )
+            if active_count > 0:
+                return False, (
+                        f"Нельзя закрыть клиента: есть {active_count} активных тренировок "
+                        f"(запланированных или завершённых). Сначала отмените или удалите их."
+                )
+
+        # Нельзя заморозить клиента с запланированными тренировками
+        if new_status == "frozen":
+            planned_count = (
+                session.query(TrainingSession)
+                .filter(
+                    TrainingSession.client_id == client_id,
+                    TrainingSession.is_actual == True,
+                    TrainingSession.status == "planned",
+                )
+                .count()
+            )
+            if planned_count > 0:
+                return False, (
+                    f"Нельзя заморозить клиента: есть {planned_count} запланированных тренировок. "
+                    f"Сначала отмените или перенесите их."
+            )
+
+        client.status = new_status
+        session.commit()
+        return True, ""
+
+    @staticmethod
+    def delete(session: Session, client_id: int) -> bool:
+        client = session.query(Client).filter(Client.id == client_id).one_or_none()
+        if not client:
+            return False
+        session.delete(client)
+        session.commit()
+        return True
 
 
 class StaffRepository:
@@ -67,6 +125,15 @@ class StaffRepository:
         session.commit()
         return staff
 
+    @staticmethod
+    def delete(session: Session, staff_id: int) -> bool:
+        staff = session.query(Staff).filter(Staff.id == staff_id).one_or_none()
+        if not staff:
+            return False
+        session.delete(staff)  # удалим связанные schedule_slots
+        session.commit()
+        return True
+
 
 class ServiceRepository:
     @staticmethod
@@ -98,6 +165,15 @@ class ServiceRepository:
             setattr(service, k, v)
         session.commit()
         return service
+
+    @staticmethod
+    def delete(session: Session, service_id: int) -> bool:
+        service = session.query(Service).filter(Service.id == service_id).one_or_none()
+        if not service:
+            return False
+        session.delete(service)
+        session.commit()
+        return True
 
 
 class ScheduleSlotRepository:
@@ -132,8 +208,88 @@ class ScheduleSlotRepository:
             session.commit()
         return slot
 
+    @staticmethod
+    def delete(session: Session, slot_id: int) -> bool:
+        slot = session.query(ScheduleSlot).filter(ScheduleSlot.id == slot_id).one_or_none()
+        if not slot:
+            return False
+        session.delete(slot)
+        session.commit()
+        return True
+
 
 class TrainingSessionRepository:
+    @staticmethod
+    def get_all(session: Session):
+        return (
+            session.query(TrainingSession)
+            .filter(TrainingSession.is_actual == True)
+            .order_by(TrainingSession.start_at.desc())
+            .all()
+        )
+
+    @staticmethod
+    def get_by_id(session: Session, training_id: int):
+        return (
+            session.query(TrainingSession)
+            .filter(
+                TrainingSession.id == training_id,
+                TrainingSession.is_actual == True,
+            )
+            .one_or_none()
+        )
+
+    @staticmethod
+    def create(session: Session, **kwargs):
+        t = TrainingSession(**kwargs)
+        session.add(t)
+        session.commit()
+        session.refresh(t)
+        return t
+
+    @staticmethod
+    def update(session: Session, training_id: int, **kwargs):
+        t = session.query(TrainingSession).filter(
+            TrainingSession.id == training_id
+        ).one_or_none()
+        if not t:
+            return None
+        for k, v in kwargs.items():
+            setattr(t, k, v)
+        session.commit()
+        return t
+
+    @staticmethod
+    def delete(session: Session, training_id: int) -> bool:
+        t = session.query(TrainingSession).filter(
+            TrainingSession.id == training_id
+        ).one_or_none()
+        if not t:
+            return False
+        session.delete(t)
+        session.commit()
+        return True
+
+    @staticmethod
+    def check_conflict(session: Session, staff_id: int, start_at, end_at,
+                       exclude_id: int = None):
+        """
+        Возвращает список тренировок, пересекающихся по времени
+        с заданным интервалом для указанного тренера.
+        exclude_id — ID тренировки, которую исключаем из проверки
+        (используется при редактировании, чтобы не найти саму себя).
+        """
+        query = session.query(TrainingSession).filter(
+            TrainingSession.staff_id == staff_id,
+            TrainingSession.is_actual == True,
+            TrainingSession.status != "cancelled",
+            TrainingSession.start_at < end_at,
+            TrainingSession.end_at > start_at,
+        )
+        if exclude_id:
+            query = query.filter(TrainingSession.id != exclude_id)
+        return query.all()
+
     @staticmethod
     def get_planned_for_staff(session: Session, staff_id: int, start_at, end_at):
         return session.query(TrainingSession).filter(

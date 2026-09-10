@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTableWidget,
                               QTableWidgetItem, QPushButton, QDialog, QFormLayout,
-                              QLineEdit, QDateEdit, QMessageBox, QHeaderView)
+                              QLineEdit, QDateEdit, QMessageBox, QHeaderView, QComboBox)
 from PyQt6.QtCore import Qt, QDate
 from PyQt6.QtGui import QColor
 from app.repositories import ClientRepository
@@ -11,6 +11,7 @@ class ClientsWindow(QWidget):
         self.session_factory = session_factory
         layout = QVBoxLayout()
 
+        # Панель кнопок
         btn_layout = QHBoxLayout()
         btn_add = QPushButton("Добавить клиента")
         btn_add.clicked.connect(self.add_client)
@@ -23,6 +24,7 @@ class ClientsWindow(QWidget):
         btn_layout.addWidget(btn_refresh)
         btn_layout.addStretch()
 
+        # Таблица
         self.table = QTableWidget()
         self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels(
@@ -58,29 +60,115 @@ class ClientsWindow(QWidget):
                 self.table.setItem(row, 2, QTableWidgetItem(c.phone or ""))
                 self.table.setItem(row, 3, QTableWidgetItem(c.email or ""))
 
-                status_item = QTableWidgetItem(c.status)
-                status_item.setBackground(self.status_color(c.status))
-                self.table.setItem(row, 4, status_item)
+                # Выпадающий список для статуса
+                status_combo = QComboBox()
+                statuses = ["new", "active", "frozen", "closed"]
+                status_combo.addItems(statuses)
+                status_combo.setCurrentText(c.status)
+                # Сохраняем client_id в пользовательском свойстве комбобокса, чтобы знать, кого обновлять
+                status_combo.setProperty("client_id", c.id)
+                status_combo.currentTextChanged.connect(lambda text, combo=status_combo: self.on_status_changed(combo))
+                self.table.setCellWidget(row, 4, status_combo)
+
+                # Цвет ячейки статуса (под цвет выбранного статуса)
+                color = self.status_color(c.status)
+                cell = QTableWidgetItem()
+                cell.setBackground(color)
+                cell.setFlags(cell.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                self.table.setItem(row, 4, cell)  # перекрываем, чтобы был фон
 
                 bd_str = c.birth_date.isoformat() if c.birth_date else ""
                 self.table.setItem(row, 5, QTableWidgetItem(bd_str))
 
+                # Кнопки в колонке «Действия»
                 edit_btn = QPushButton("Изменить")
                 edit_btn.setFixedWidth(80)
                 edit_btn.clicked.connect(lambda checked, cid=c.id: self.edit_client(cid))
-                self.table.setCellWidget(row, 6, edit_btn)
+
+                del_btn = QPushButton("Удалить")
+                del_btn.setFixedWidth(80)
+                del_btn.setStyleSheet("color: red; font-weight: bold;")
+                del_btn.clicked.connect(lambda checked, cid=c.id: self.delete_client(cid))
+
+                action_layout = QHBoxLayout()
+                action_layout.setContentsMargins(0, 0, 0, 0)
+                action_layout.addWidget(edit_btn)
+                action_layout.addWidget(del_btn)
+
+                cell_widget = QWidget()
+                cell_widget.setLayout(action_layout)
+                self.table.setCellWidget(row, 6, cell_widget)  # 6 — индекс колонки «Действия»
+        finally:
+            session.close()
+
+    def on_status_changed(self, combo: QComboBox):
+        client_id = combo.property("client_id")
+        new_status = combo.currentText()
+
+        reply = QMessageBox.question(
+            self,
+            "Подтверждение",
+            f"Изменить статус клиента ID {client_id} на «{new_status}»?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            # Откатим к предыдущему значению, если пользователь нажал «Нет»
+            # Для простоты перезагружаем таблицу
+            self.load_data()
+            return
+
+        session = self.session_factory()
+        try:
+            ok, msg = ClientRepository.update_status(session, client_id, new_status)
+            if ok:
+                QMessageBox.information(self, "Готово", "Статус изменён.")
+                self.load_data()  # перерисуем таблицу с новыми цветами
+            else:
+                QMessageBox.warning(self, "Отклонено", msg)
+                self.load_data()
+        except Exception as e:
+            session.rollback()
+            QMessageBox.critical(self, "Ошибка БД", str(e))
+            self.load_data()
         finally:
             session.close()
 
     def add_client(self):
         dialog = ClientDialog(self.session_factory, self)
-        dialog.exec()
-        self.load_data()
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.load_data()
 
     def edit_client(self, client_id):
         dialog = ClientDialog(self.session_factory, self, client_id=client_id)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.load_data()
+
+    def delete_client(self, client_id: int):
+        reply = QMessageBox.question(
+            self,
+            "Подтверждение",
+            f"Вы уверены, что хотите удалить клиента с ID {client_id}?\n"
+            "Если есть связанные тренировки — удаление будет заблокировано БД.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        session = self.session_factory()
+        try:
+            ok = ClientRepository.delete(session, client_id)
+            if ok:
+                QMessageBox.information(self, "Готово", "Клиент удалён.")
+                self.load_data()
+            else:
+                QMessageBox.warning(self, "Ошибка", "Клиент не найден.")
+        except Exception as e:
+            session.rollback()
+            QMessageBox.critical(self, "Ошибка БД", str(e))
+        finally:
+            session.close()
 
     def open_training_form(self):
         from app.ui.training_form import TrainingForm
@@ -103,7 +191,7 @@ class ClientDialog(QDialog):
         self.email_edit = QLineEdit()
         self.birth_edit = QDateEdit()
         self.birth_edit.setDisplayFormat("yyyy-MM-dd")
-        #self.birth_edit.setDate(QDate(2000, 1, 1))
+        self.birth_edit.setDate(QDate(2000, 1, 1))
 
         layout.addRow("ФИО *:", self.name_edit)
         layout.addRow("Телефон:", self.phone_edit)
