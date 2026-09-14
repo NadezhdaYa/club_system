@@ -26,8 +26,23 @@ class ServicesWindow(QWidget):
         self.table.setHorizontalHeaderLabels(
             ["ID", "Название", "Цена (руб.)", "Длительность (мин.)", "Активна", "Действия"]
         )
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+
+        self.table.setColumnWidth(0, 60)  # ID
+        self.table.setColumnWidth(2, 80)  # Цена (по центру)
+        self.table.setColumnWidth(3, 90)  # Длительность
+        self.table.setColumnWidth(4, 85)  # Статус
+        self.table.setColumnWidth(5, 180)  # Действия
+
+        # Растягиваем название
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+
+        for i in [0, 2, 3, 4, 5]:
+            self.table.horizontalHeader().setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)
+
         self.table.setAlternatingRowColors(True)
+        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.table.setWordWrap(True)
+        self.table.setStyleSheet("QTableView::item { padding: 4px; }")
 
         layout.addLayout(btn_layout)
         layout.addWidget(self.table)

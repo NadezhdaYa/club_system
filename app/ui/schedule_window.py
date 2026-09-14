@@ -36,8 +36,23 @@ class ScheduleWindow(QWidget):
         self.table.setHorizontalHeaderLabels(
             ["ID", "Тренер", "День недели", "Время", "Макс. клиентов", "Действия"]
         )
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+
+        self.table.setColumnWidth(0, 55)  # ID
+        self.table.setColumnWidth(2, 120)  # Дата
+        self.table.setColumnWidth(3, 75)  # Время
+        self.table.setColumnWidth(4, 55)  # Статус
+        self.table.setColumnWidth(5, 100)  # Действия
+
+        # Растягиваем Клиент, Тренер, Услуга
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+
+        for i in [0, 2, 3, 4, 5]:
+            self.table.horizontalHeader().setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)
+
         self.table.setAlternatingRowColors(True)
+        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.table.setWordWrap(True)
+        self.table.setStyleSheet("QTableView::item { padding: 4px; }")
 
         layout.addLayout(btn_layout)
         layout.addWidget(self.table)

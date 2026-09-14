@@ -30,8 +30,29 @@ class ClientsWindow(QWidget):
         self.table.setHorizontalHeaderLabels(
             ["ID", "ФИО", "Телефон", "E-mail", "Статус", "Дата рождения", "Действия"]
         )
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+
+        # Фиксируем колонки
+        self.table.setColumnWidth(0, 60)  # ID
+        self.table.setColumnWidth(2, 110)  # Телефон
+        self.table.setColumnWidth(3, 130)  # E-mail
+        self.table.setColumnWidth(4, 90)  # Статус
+        self.table.setColumnWidth(5, 120)  # Дата рождения
+        self.table.setColumnWidth(6, 220)  # Действия (кнопки)
+
+        # Растягиваем ФИО
+        self.table.horizontalHeader().setSectionResizeMode(
+            1, QHeaderView.ResizeMode.Stretch
+        )
+        # Остальные — по содержимому
+        for i in [0, 2, 3, 4, 5, 6]:
+            self.table.horizontalHeader().setSectionResizeMode(
+                i, QHeaderView.ResizeMode.ResizeToContents
+            )
+
         self.table.setAlternatingRowColors(True)
+        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)  # строка целиком
+        self.table.setWordWrap(True)  # если в ячейках много текста — перенос
+        #self.table.setStyleSheet("QTableView::item { padding: 4px; }")
 
         layout.addLayout(btn_layout)
         layout.addWidget(self.table)
@@ -82,24 +103,34 @@ class ClientsWindow(QWidget):
 
                 # Кнопки в колонке «Действия»
                 edit_btn = QPushButton("Изменить")
-                edit_btn.setFixedWidth(80)
+                edit_btn.setFixedWidth(70)
                 edit_btn.clicked.connect(lambda checked, cid=c.id: self.edit_client(cid))
 
                 del_btn = QPushButton("Удалить")
-                del_btn.setFixedWidth(80)
+                del_btn.setFixedWidth(70)
                 del_btn.setStyleSheet("color: red; font-weight: bold;")
                 del_btn.clicked.connect(lambda checked, cid=c.id: self.delete_client(cid))
+
+                tr_btn = QPushButton("Тренировки")
+                tr_btn.setFixedWidth(80)
+                tr_btn.clicked.connect(lambda checked, cid=c.id, cname=c.full_name: self.open_client_trainings(cid, cname))
 
                 action_layout = QHBoxLayout()
                 action_layout.setContentsMargins(0, 0, 0, 0)
                 action_layout.addWidget(edit_btn)
                 action_layout.addWidget(del_btn)
+                action_layout.addWidget(tr_btn)
 
                 cell_widget = QWidget()
                 cell_widget.setLayout(action_layout)
                 self.table.setCellWidget(row, 6, cell_widget)  # 6 — индекс колонки «Действия»
         finally:
             session.close()
+
+    def open_client_trainings(self, client_id, client_name):
+        from app.ui.client_trainings_dialog import ClientTrainingsDialog
+        dialog = ClientTrainingsDialog(self.session_factory, client_id, client_name, self)
+        dialog.exec()
 
     def on_status_changed(self, combo: QComboBox):
         client_id = combo.property("client_id")

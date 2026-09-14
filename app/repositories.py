@@ -240,6 +240,18 @@ class TrainingSessionRepository:
         )
 
     @staticmethod
+    def get_by_client(session: Session, client_id: int):
+        return (
+            session.query(TrainingSession)
+            .filter(
+                TrainingSession.client_id == client_id,
+                TrainingSession.is_actual == True,
+            )
+            .order_by(TrainingSession.start_at.desc())
+            .all()
+        )
+
+    @staticmethod
     def create(session: Session, **kwargs):
         t = TrainingSession(**kwargs)
         session.add(t)

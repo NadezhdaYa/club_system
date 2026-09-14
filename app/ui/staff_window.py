@@ -27,8 +27,24 @@ class StaffWindow(QWidget):
         self.table.setHorizontalHeaderLabels(
             ["ID", "ФИО", "Телефон", "E-mail", "Должность", "Активен", "Действия"]
         )
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+
+        self.table.setColumnWidth(0, 60)  # ID
+        self.table.setColumnWidth(3, 110)  # Телефон
+        self.table.setColumnWidth(4, 130)  # E-mail
+        self.table.setColumnWidth(5, 90)  # Статус
+        self.table.setColumnWidth(6, 200)  # Действия
+
+        # Растягиваем ФИО и Должность
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+
+        for i in [0, 3, 4, 5, 6]:
+            self.table.horizontalHeader().setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)
+
         self.table.setAlternatingRowColors(True)
+        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.table.setWordWrap(True)
+        self.table.setStyleSheet("QTableView::item { padding: 4px; }")
 
         layout.addLayout(btn_layout)
         layout.addWidget(self.table)

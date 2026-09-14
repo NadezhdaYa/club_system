@@ -44,6 +44,7 @@ class ReportsWindow(QWidget):
         self.table_status_detail.setHorizontalHeaderLabels(
             ["ID", "ФИО", "Телефон", "E-mail", "Дата создания"]
         )
+
         self.table_status_detail.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         layout.addWidget(QLabel("Детализация по выбранному статусу:"))
         layout.addWidget(self.table_status_detail)
